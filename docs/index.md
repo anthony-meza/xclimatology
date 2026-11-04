@@ -8,6 +8,7 @@
 :caption: Contents:
 
 Home <self>
+Examples <examples/index>
 :::
 
 This is the landing page of your docs. you can update it as you'd like to.

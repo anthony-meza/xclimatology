@@ -50,7 +50,7 @@ dev = [
 
 docs = [
     "sphinx~=8.0",
-    "myst-parser>=4.0",
+    "myst-nb",
     "pydata-sphinx-theme>=0.16",
     "sphinx-autobuild>=2024.10.3",
     "sphinx-autoapi>=3.6.0",
@@ -246,20 +246,3 @@ dependency-groups = [
 
 [tool.hatch.envs.audit.scripts]
 check = ["pip-audit"]
-
-[tool.pixi.workspace]
-channels = ["conda-forge"]
-platforms = ["osx-arm64"]
-
-[tool.pixi.pypi-dependencies]
-xclimatology = { path = ".", editable = true }
-
-[tool.pixi.environments]
-default = { solve-group = "default" }
-build = { features = ["build"], solve-group = "default" }
-dev = { features = ["dev"], solve-group = "default" }
-docs = { features = ["docs"], solve-group = "default" }
-style = { features = ["style"], solve-group = "default" }
-tests = { features = ["tests"], solve-group = "default" }
-
-[tool.pixi.tasks]
