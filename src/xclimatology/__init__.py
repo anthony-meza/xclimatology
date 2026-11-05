@@ -28,4 +28,4 @@ This might include a very brief description of the package,
 its purpose, and any important notes.
 """
 
-from example import * 
+from .example import * 
