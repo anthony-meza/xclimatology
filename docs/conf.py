@@ -34,6 +34,7 @@ except importlib.metadata.PackageNotFoundError:
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = [
     "myst_parser",
+    "nbsphinx",
     "sphinx_design",
     "sphinx_copybutton",
     "sphinx.ext.intersphinx",
