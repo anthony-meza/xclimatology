@@ -263,3 +263,6 @@ style = { features = ["style"], solve-group = "default" }
 tests = { features = ["tests"], solve-group = "default" }
 
 [tool.pixi.tasks]
+
+[tool.pixi.feature.docs.dependencies]
+pandoc = ">=3.13,<4"
