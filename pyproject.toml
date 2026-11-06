@@ -242,9 +242,9 @@ detached = true
 
 [tool.hatch.envs.style.scripts]
 docstrings = "pydoclint src/ tests/"
-code = "ruff check {args}"
+code = "ruff check --fix {args}"
 format = "ruff format {args}"
-check = ["docstrings", "code"]
+check = ["format", "code", "docstrings"]
 
 #--------------- Check security for your dependencies ---------------#
 
