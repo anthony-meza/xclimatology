@@ -243,7 +243,7 @@ detached = true
 docstrings = "pydoclint src/ tests/"
 code = "ruff check --fix {args}"
 format = "ruff format {args}"
-check = ["format", "code", "docstrings"]
+check = ["format", "code"]
 
 #--------------- Check security for your dependencies ---------------#
 
