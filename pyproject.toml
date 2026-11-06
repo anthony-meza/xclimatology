@@ -65,6 +65,8 @@ docs = [
     "sphinx-design>=0.6.1",
 ]
 
+myst_enable_extensions = ["dollarmath", "amsmath"]
+
 build = [
     "pip-audit",
     "twine",
