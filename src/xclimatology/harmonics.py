@@ -104,7 +104,6 @@ def climatology(
     --------
     >>> clim = ds.climatology()
     >>> anomaly = ds - clim
-    >>> diurnal = da.climatology(n_harmonics=1, period=1, period_units="day")
     """
 
     def fit(da):
@@ -142,25 +141,28 @@ def coefficients(
         Data with dimension ``time_dim`` and any other dimensions.
     n_harmonics, period, period_units, detrend_degree, time_dim, weights
         As in :py:func:`climatology`.
-
+    period : float, default: 1.0
+        Fundamental period T, in ``period_units``.
+    period_units : str, default: "year"
+        ``"year"``, or a :py:class:`pandas.Timedelta` unit such as ``"day"``,
+        ``"hour"``, or ``"minute"``.
+    detrend_degree : int or None, default: 1
+        Degree P of a polynomial trend fit jointly with the harmonics, so the
+        trend does not leak into the mean and the low harmonics. A positive
+        integer (1 is linear, 2 is quadratic) or None, which fits no trend.
+    time_dim : str, default: "time"
+        Name of the time dimension. Its coordinate must hold datetimes; decode
+        numeric CF times with :py:func:`xarray.decode_cf` first.
+    weights : DataArray, optional
+        Positive weights along ``time_dim``.
     Returns
     -------
-    Dataset
-        With variables
-
-        - ``mean``: μ, the mean value.
-        - ``cos``, ``sin`` (harmonic): aₖ and bₖ.
-        - ``amplitude`` (harmonic): √(aₖ² + bₖ²).
-        - ``phase`` (harmonic): atan2(bₖ, aₖ) in radians. The harmonic k first
-          peaks (phase mod 2π) / (kω) after January 1 (years) or midnight
-          (shorter units).
-        - ``trend`` (degree), unless ``detrend_degree=None``: the coefficient of
-          (t - t₀)ᵖ, with t in ``period_units`` and t₀ = ``attrs["t0"]`` the
-          middle of the record. Degree 1 is the linear trend per ``period_units``.
-
-        A series is NaN if its samples cannot separate the terms, for example
-        when it has fewer valid samples than coefficients, or is sampled only on
-        January 1 and so cannot tell the annual cosine from the mean.
+    Dataset containing the mean values and 
+    harmonic attributes (aₖ, bₖ, amplitude, phase, etc.,) 
+    of a climatology. 
+    A series is NaN if its samples cannot separate the terms, for example
+    when it has fewer valid samples than coefficients, or is sampled only on
+    January 1 and so cannot tell the annual cosine from the mean.
 
     See Also
     --------
