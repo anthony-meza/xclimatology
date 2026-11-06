@@ -141,6 +141,7 @@ ignore = [
     "D401",  # 'First line should be in imperative mood' ignored
     "ANN001",  # Missing type annotation for {arg} in function" ignored
     "ANN201",  # 'Missing type annotation for {return}'.
+    "EXE002", # 'The file is executable but no shebang is present' ignored because scripts are always invoked explicitly via 'python'.
 ]
 exclude = [
     "src/xclimatology/_version.py",
