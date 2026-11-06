@@ -75,7 +75,6 @@ tests = [
     "pytest-cov",
 ]
 style = [
-    "pydoclint",
     "ruff",
 ]
 
@@ -167,14 +166,6 @@ case-sensitive = true
 known-first-party = ["src", "xclimatology"]
 lines-after-imports = 1
 
-[tool.pydoclint]
-style = "numpy"
-arg-type-hints-in-signature = true
-arg-type-hints-in-docstring = true
-check-return-types = false
-check-yield-types = false
-exclude = "_version.py"
-# Use UV to create Hatch environments
 [tool.hatch.envs.default]
 installer = "uv"
 
@@ -240,7 +231,6 @@ dependency-groups = [
 detached = true
 
 [tool.hatch.envs.style.scripts]
-docstrings = "pydoclint src/ tests/"
 code = "ruff check --fix {args}"
 format = "ruff format {args}"
 check = ["format", "code"]
