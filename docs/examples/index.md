@@ -3,5 +3,6 @@
 :::{toctree}
 :maxdepth: 1
 
-test
+diurnal_cycle
+seasonal_cycle
 :::

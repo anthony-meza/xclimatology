@@ -30,9 +30,16 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 # TODO: add keywords
-keywords = []
+# keywords = []
 # TODO: add dependencies
-dependencies = []
+dependencies = [
+  "cftime",
+  "numpy",
+  "pandas",
+  "xarray[complete]",
+  "xarray-einstats",
+  "matplotlib"
+]
 
 [project.urls]
 Homepage = "https://github.com/anthony-meza/xclimatology"
