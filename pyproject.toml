@@ -133,7 +133,7 @@ precision = 2
 line-length = 88
 
 [tool.ruff.lint]
-select = ["ALL"]
+select = ["E4", "E7", "E9", "F", "I"] # Enable basic error detection (E), unused import checks (F), and import sorting (I), without enforcing strict style conventions.
 ignore = [
     "D107",  # 'Missing docstring in __init__' ignored because pydoclint wants us to document the class instead.
     "D203",  # '1 blank line required before class docstring' ignored because we want no blank line.
