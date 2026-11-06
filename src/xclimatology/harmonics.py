@@ -1,20 +1,32 @@
-"""Harmonic climatology: the mean, seasonal harmonics, and an optional trend.
+r"""Harmonic climatology: a polynomial in time plus harmonics of a period.
 
-Each series along the time dimension is fit by weighted least squares to
+The climatology of each time series is the weighted least-squares fit
 
-    y(t) = μ + Σₖ [aₖ cos(kωt) + bₖ sin(kωt)] + Σₚ cₚ τᵖ + ε(t),    ω = 2π/T
+$$
+\begin{aligned}
+\bar{y}(\mathbf{x}, t) &= \sum_{p=0}^{P} c_p(\mathbf{x}) \, (t - t_{\mathrm{mid}})^p
++ \sum_{k=1}^{K} \left[ a_k(\mathbf{x}) \cos(k\omega t)
++ b_k(\mathbf{x}) \sin(k\omega t) \right], \\
+\omega &= \frac{2\pi}{T},
+\end{aligned}
+$$
 
-where T is the fundamental period, the harmonics run over k = 1, ..., K, the
-trend is a polynomial of degree P in τ (time scaled to [-1, 1] over the record),
-μ is the mean value, and ε is the residual. μ is the 0th harmonic (the sine term
-vanishes at k = 0) and is always fit; K = 0 and P = 0 leave the mean alone.
+with time $t$ in ``period_units``, $t_{\mathrm{mid}}$ the middle of the record,
+and period $T$. The polynomial has degree $P$, and its constant term $c_0$ is the
+intercept at $t_{\mathrm{mid}}$. Harmonic $k$ is the sinusoid of period $T/k$, so
+$T = 1$ year and $K = 2$ give the annual and semiannual cycles.
 
-In matrix form y = Xβ + ε. Each column of the design matrix X is one term,
-[1, cos ωt, sin ωt, ..., cos Kωt, sin Kωt, τ, ..., τᴾ], and β = [μ, a₁, b₁, ...,
-c_P] holds the m coefficients. β minimizes the weighted squared residual rᵀWr,
-where r = y - Xβ and the diagonal weights W are zero at missing samples.
+At each $\mathbf{x}$, $\bar{y} = X\beta$. Each column of the design matrix $X$
+is one term of the fit, and $\beta$ holds the $m = P + 1 + 2K$ coefficients. $X$
+depends only on $t$, so every time series shares it. $\beta$ minimizes
+$y'^\mathsf{T} W y'$, where the diagonal matrix $W$ holds the weights and is zero
+at missing samples.
 
-The trend is fit in τ, which keeps XᵀWX well conditioned, and reported per unit of t.
+The polynomial columns of $X$ are powers of $\tau = (t - t_{\mathrm{mid}})/L$,
+which is $t$ rescaled to $[-1, 1]$ by the half-length $L$ of the record. Powers
+of $\tau$ stay of order 1, while powers of $t$ do not ($t \approx 2000$ in
+years), so $X^\mathsf{T} W X$ stays well conditioned. :py:func:`coefficients`
+divides the coefficient of $\tau^p$ by $L^p$ to give $c_p$.
 """
 
 from __future__ import annotations
@@ -26,8 +38,8 @@ import xarray as xr
 import xarray.ufuncs as xu
 from xarray_einstats import linalg
 
-# einstats options for the m × m matrix XᵀWX. Merging its dask chunks is cheap, and
-# output_dtypes stops dask from probing the inverse with a singular dummy matrix.
+# For the m × m matrix XᵀWX. output_dtypes stops dask probing inv with a singular
+# dummy matrix.
 _MATRIX_OPTIONS = {
     "dims": ["term", "term_"],
     "dask": "parallelized",
@@ -59,14 +71,13 @@ def climatology(
     *,
     period: float = 1.0,
     period_units: str = "year",
-    detrend_degree: int | None = 1,
+    detrend_degree: int = 1,
     time_dim: str = "time",
     weights: xr.DataArray | None = None,
 ) -> xr.DataArray | xr.Dataset:
-    """Fit a harmonic climatology and return it on the input's time axis.
+    r"""Return the harmonic climatology $\bar{y}$ of ``obj`` on its time axis.
 
-    The climatology is the mean plus the harmonics and the trend, so
-    ``obj - climatology(obj)`` is the anomaly with all three removed.
+    ``obj - climatology(obj)`` is the anomaly $y'$.
 
     Parameters
     ----------
@@ -74,27 +85,26 @@ def climatology(
         Data with dimension ``time_dim`` and any other dimensions. For a Dataset,
         every variable is fit.
     n_harmonics : int, default: 2
-        Number of harmonics K. The mean, the 0th harmonic, is always fit.
+        Number of harmonics $K$. With ``0``, only the polynomial is fit.
     period : float, default: 1.0
-        Fundamental period T, in ``period_units``.
+        Period $T$, in ``period_units``.
     period_units : str, default: "year"
-        ``"year"``, or a :py:class:`pandas.Timedelta` unit such as ``"day"``,
-        ``"hour"``, or ``"minute"``.
-    detrend_degree : int or None, default: 1
-        Degree P of a polynomial trend fit jointly with the harmonics, so the
-        trend does not leak into the mean and the low harmonics. A positive
-        integer (1 is linear, 2 is quadratic) or None, which fits no trend.
+        Unit of $t$ and $T$, either ``"year"`` or a :py:class:`pandas.Timedelta`
+        unit such as ``"day"``, ``"hour"``, or ``"minute"``.
+    detrend_degree : int, default: 1
+        Degree $P$ of the polynomial. ``0`` fits only the intercept $c_0$, and
+        ``1`` adds a linear trend. The polynomial is fit jointly with the
+        harmonics so that a trend does not leak into the low harmonics.
     time_dim : str, default: "time"
-        Name of the time dimension. Its coordinate must hold datetimes; decode
+        Name of the time dimension. Its coordinate must hold datetimes, so decode
         numeric CF times with :py:func:`xarray.decode_cf` first.
     weights : DataArray, optional
-        Positive weights along ``time_dim``.
+        Positive weights along ``time_dim``, the diagonal of $W$.
 
     Returns
     -------
     DataArray or Dataset
-        Fitted climatology with the same dimensions, name, and attributes as
-        ``obj``.
+        $\bar{y}$, with the dimensions, name, and attributes of ``obj``.
 
     See Also
     --------
@@ -106,21 +116,14 @@ def climatology(
     >>> anomaly = ds - clim
     """
 
-    def fit(da):
-        beta, model = _fit(
-            da,
-            n_harmonics,
-            period,
-            period_units,
-            detrend_degree,
-            time_dim,
-            weights,
+    def ybar_of(da):
+        beta, X, _ = _fit(
+            da, n_harmonics, period, period_units, detrend_degree, time_dim, weights
         )
-        X = _design_matrix(_time_in(da[time_dim], period_units), model)
-        fitted = xr.dot(beta, X, dim="term")  # Xβ
-        return fitted.transpose(*da.dims).rename(da.name).assign_attrs(da.attrs)
+        ybar = xr.dot(beta, X, dim="term")  # ȳ = Xβ
+        return ybar.transpose(*da.dims).rename(da.name).assign_attrs(da.attrs)
 
-    return obj.map(fit) if isinstance(obj, xr.Dataset) else fit(obj)
+    return obj.map(ybar_of) if isinstance(obj, xr.Dataset) else ybar_of(obj)
 
 
 def coefficients(
@@ -129,40 +132,43 @@ def coefficients(
     *,
     period: float = 1.0,
     period_units: str = "year",
-    detrend_degree: int | None = 1,
+    detrend_degree: int = 1,
     time_dim: str = "time",
     weights: xr.DataArray | None = None,
 ) -> xr.Dataset:
-    """Fit the mean, K harmonics, and a degree-P trend to every series in ``da``.
+    r"""Fit the harmonic climatology $\bar{y}$ and return its coefficients.
 
     Parameters
     ----------
     da : DataArray
         Data with dimension ``time_dim`` and any other dimensions.
-    n_harmonics, period, period_units, detrend_degree, time_dim, weights
-        As in :py:func:`climatology`.
+    n_harmonics : int, default: 2
+        Number of harmonics $K$. With ``0``, only the polynomial is fit.
     period : float, default: 1.0
-        Fundamental period T, in ``period_units``.
+        Period $T$, in ``period_units``.
     period_units : str, default: "year"
-        ``"year"``, or a :py:class:`pandas.Timedelta` unit such as ``"day"``,
-        ``"hour"``, or ``"minute"``.
-    detrend_degree : int or None, default: 1
-        Degree P of a polynomial trend fit jointly with the harmonics, so the
-        trend does not leak into the mean and the low harmonics. A positive
-        integer (1 is linear, 2 is quadratic) or None, which fits no trend.
+        Unit of $t$ and $T$, either ``"year"`` or a :py:class:`pandas.Timedelta`
+        unit such as ``"day"``, ``"hour"``, or ``"minute"``.
+    detrend_degree : int, default: 1
+        Degree $P$ of the polynomial. ``0`` fits only the intercept $c_0$, and
+        ``1`` adds a linear trend. The polynomial is fit jointly with the
+        harmonics so that a trend does not leak into the low harmonics.
     time_dim : str, default: "time"
-        Name of the time dimension. Its coordinate must hold datetimes; decode
+        Name of the time dimension. Its coordinate must hold datetimes, so decode
         numeric CF times with :py:func:`xarray.decode_cf` first.
     weights : DataArray, optional
-        Positive weights along ``time_dim``.
+        Positive weights along ``time_dim``, the diagonal of $W$.
+
     Returns
     -------
-    Dataset containing the mean values and 
-    harmonic attributes (aₖ, bₖ, amplitude, phase, etc.,) 
-    of a climatology. 
-    A series is NaN if its samples cannot separate the terms, for example
-    when it has fewer valid samples than coefficients, or is sampled only on
-    January 1 and so cannot tell the annual cosine from the mean.
+    Dataset
+        ``polynomial`` holds $c_p$ along ``degree``, with $t_{\mathrm{mid}}$ in
+        ``attrs["t_mid"]``. Along ``harmonic``, ``cos`` and ``sin`` hold $a_k$
+        and $b_k$, ``amplitude`` holds $\sqrt{a_k^2 + b_k^2}$, and ``phase``
+        holds $\mathrm{atan2}(b_k, a_k)$ in radians. A time series is NaN if its
+        samples cannot determine every coefficient, for example with fewer valid
+        samples than coefficients, or with samples only on January 1, where
+        $\cos\omega t = 1$ and $a_1$ cannot be told apart from $c_0$.
 
     See Also
     --------
@@ -170,40 +176,39 @@ def coefficients(
     """
     if not isinstance(da, xr.DataArray):
         raise TypeError("coefficients takes a DataArray; select one variable.")
-    beta, model = _fit(
+    beta, _, model = _fit(
         da, n_harmonics, period, period_units, detrend_degree, time_dim, weights
     )
 
+    def select_terms(name, orders, dim):
+        """β for the terms ``{name}{order}``, indexed by order along ``dim``."""
+        terms = beta.sel(term=[f"{name}{order}" for order in orders])
+        return terms.assign_coords(term=list(orders)).rename(term=dim)
+
     units = {"units": da.attrs["units"]} if "units" in da.attrs else {}
-    k = np.arange(1, n_harmonics + 1)
-    a = beta.sel(term=[f"cos{i}" for i in k]).assign_coords(term=k)
-    b = beta.sel(term=[f"sin{i}" for i in k]).assign_coords(term=k)
-    a, b = a.rename(term="harmonic"), b.rename(term="harmonic")
+    # τᵖ = (t - t_mid)ᵖ / Lᵖ, so cₚ is the τᵖ coefficient over Lᵖ.
+    c = select_terms("poly", range(detrend_degree + 1), "degree")
+    c = (c / model["L"] ** c["degree"]).assign_attrs(
+        long_name=f"coefficient of (t - t_mid)**degree, t in {period_units}"
+    )
+    a = select_terms("cos", range(1, n_harmonics + 1), "harmonic")
+    b = select_terms("sin", range(1, n_harmonics + 1), "harmonic")
     variables = {
-        "mean": beta.sel(term="mean", drop=True).assign_attrs(units),
+        "polynomial": c,
         "cos": a.assign_attrs(units),
         "sin": b.assign_attrs(units),
         "amplitude": xu.hypot(a, b).assign_attrs(units),
         "phase": xu.arctan2(b, a).assign_attrs(units="radian"),
     }
-    if model["detrend_degree"]:
-        # The fit uses τ = (t - t₀)/L, so the coefficient of (t - t₀)ᵖ is cₚ / Lᵖ.
-        p = np.arange(1, model["detrend_degree"] + 1)
-        c = beta.sel(term=[f"trend{i}" for i in p]).assign_coords(term=p)
-        c = c.rename(term="degree")
-        variables["trend"] = (c / model["L"] ** c["degree"]).assign_attrs(
-            long_name=f"coefficient of (t - t0)**degree, t in {period_units}"
-        )
-    keep = ("period", "period_units", "n_harmonics", "detrend_degree", "t0")
-    attrs = {key: model[key] for key in keep if model[key] is not None}
-    return xr.Dataset(variables, attrs=attrs)
+    keep = ("period", "period_units", "n_harmonics", "detrend_degree", "t_mid")
+    return xr.Dataset(variables, attrs={key: model[key] for key in keep})
 
 
 def _fit(da, n_harmonics, period, period_units, detrend_degree, time_dim, weights):
-    """Return β (term), NaN where a series cannot be fit, and the model."""
-    is_degree = isinstance(detrend_degree, int) and not isinstance(detrend_degree, bool)
-    if detrend_degree is not None and not (is_degree and detrend_degree >= 1):
-        raise ValueError("detrend_degree must be None or a positive integer.")
+    """Return β (term), NaN where a time series cannot be fit, X, and the model."""
+    # type(), since bool subclasses int.
+    if type(detrend_degree) is not int or detrend_degree < 0:
+        raise ValueError("detrend_degree must be a non-negative integer.")
     t = _time_in(da[time_dim], period_units)
     mean_interval = float(t.diff(time_dim).mean())
     if 2 * mean_interval * n_harmonics > period:
@@ -217,7 +222,7 @@ def _fit(da, n_harmonics, period, period_units, detrend_degree, time_dim, weight
         "period_units": period_units,
         "n_harmonics": n_harmonics,
         "detrend_degree": detrend_degree,
-        "t0": float(t.max() + t.min()) / 2,
+        "t_mid": float(t.max() + t.min()) / 2,
         "L": float(t.max() - t.min()) / 2 or 1.0,
     }
     X = _design_matrix(t, model)
@@ -226,34 +231,31 @@ def _fit(da, n_harmonics, period, period_units, detrend_degree, time_dim, weight
     valid, y = da.notnull(), da.fillna(0)
     m = X.sizes["term"]
 
-    # Normal equations (XᵀWX) β = XᵀWy for every series at once. y is zero where
-    # missing, so XᵀWy needs no mask. Only y and the mask are as large as the data.
+    # β minimizes (y - Xβ)ᵀW(y - Xβ), so (XᵀWX) β = XᵀWy at every x. y is zero where
+    # missing, so XᵀWy needs no mask. With weights along time only, y and the mask
+    # are the only arrays as large as the data.
     XtWX = xr.dot(valid, w * X * X.rename(term="term_"), dim=time_dim)
     XtWy = xr.dot(y, w * X, dim=time_dim)
-    # A series can be fit when XᵀWX has full rank m, so the samples determine
-    # every coefficient. The rank counts singular values above
-    # σ_max · m · machine epsilon (NumPy's default).
-    fitted = linalg.matrix_rank(XtWX, **_MATRIX_OPTIONS) == m
+    # Full rank m means the samples determine every coefficient (NumPy's tolerance,
+    # σ_max · m · eps).
+    is_full_rank = linalg.matrix_rank(XtWX, **_MATRIX_OPTIONS) == m
 
-    # β = (XᵀWX)⁻¹ XᵀWy. Series that cannot be fit get an identity matrix so the
-    # batched inverse never fails, and are set to NaN at the end. (XᵀWX)⁻¹ is
-    # symmetric, so contracting over either of its dims gives β.
+    # The identity stands in where rank is deficient, so the batched inverse never
+    # fails. (XᵀWX)⁻¹ is symmetric, so either of its dims can be contracted.
     identity = xr.DataArray(np.eye(m), dims=("term", "term_"))
-    XtWX_inv = linalg.inv(XtWX.where(fitted, identity), **_MATRIX_OPTIONS)
+    XtWX_inv = linalg.inv(XtWX.where(is_full_rank, identity), **_MATRIX_OPTIONS)
     beta = xr.dot(XtWX_inv, XtWy, dim="term").rename(term_="term")
-    return beta.where(fitted), model
+    return beta.where(is_full_rank), X, model
 
 
 def _design_matrix(t: xr.DataArray, model: dict) -> xr.DataArray:
     """Return the design matrix X with dimensions (term, time)."""
     omega_t = 2 * np.pi * t / model["period"]
-    # Scaling τ to [-1, 1] keeps cond(XᵀWX) near 1 to 100, so forming the normal
-    # equations loses no precision. Removing each τᵖ's mean keeps μ the mean value.
-    tau = (t - model["t0"]) / model["L"]
-    columns = {"mean": xr.ones_like(t)}
+    # τ in [-1, 1] keeps cond(XᵀWX) under ~100 for P ≤ 3. Powers of t ≈ 2000 years
+    # would push it past 10¹⁰.
+    tau = (t - model["t_mid"]) / model["L"]
+    columns = {f"poly{p}": tau**p for p in range(model["detrend_degree"] + 1)}
     for k in range(1, model["n_harmonics"] + 1):
         columns[f"cos{k}"] = xu.cos(k * omega_t)
         columns[f"sin{k}"] = xu.sin(k * omega_t)
-    for p in range(1, (model["detrend_degree"] or 0) + 1):
-        columns[f"trend{p}"] = tau**p - (tau**p).mean()
     return xr.Dataset(columns).to_dataarray("term")

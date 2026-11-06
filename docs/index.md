@@ -1,6 +1,4 @@
-# Welcome to xclimatology's Documentation '
-
-## Overview
+# xclimatology
 
 :::{toctree}
 :maxdepth: 2
@@ -9,41 +7,34 @@
 
 Home <self>
 Examples <examples/index>
+API reference <autoapi/index>
 :::
 
-This is the landing page of your docs. you can update it as you'd like to.
-This documentation example uses myst markdown as the primary documentation syntax.
+xclimatology fits climatologies to xarray objects. Each time series is split
+into a climatology $\bar{y}$ and an anomaly $y'$,
 
+$$
+y(\mathbf{x}, t) = \bar{y}(\mathbf{x}, t) + y'(\mathbf{x}, t),
+$$
 
-:::{button-link} <https://www.pyopensci.org/python-package-guide/documentation/hosting-tools/myst-markdown-rst-doc-syntax.html>
-:color: primary
-:class: sd-rounded-pill float-left
+where $t$ is time and $\mathbf{x}$ stands for every other dimension, such as
+latitude, longitude, or depth. The harmonic method fits $\bar{y}$ as a polynomial in time
+plus harmonics of a period, at every $\mathbf{x}$ at once. See
+{py:mod}`xclimatology.harmonics` for the model.
 
-Learn more about myst in our pyOpenSci packaging guide.
+## Quick start
 
-:::
+```python
+import xarray as xr
+import xclimatology  # registers the .climatology accessor
 
-Myst is a version of markdown that has more formatting flexibility.
-This is what a sphinx directive looks like using myst markdown formatting:
-
-```markdown
-:::{toctree}
-:maxdepth: 2
-:caption: Contents:
-:::
-
-```
-
-If you see syntax like the syntax below, you are looking at rst.
-
-```rst
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+sst = xr.tutorial.load_dataset("ersstv5")["sst"]
+clim = sst.climatology(n_harmonics=2, detrend_degree=1)
+anomaly = sst - clim
+coefs = sst.climatology.coefficients(n_harmonics=2, detrend_degree=1)
 ```
 
 ## Copyright
 
 - Copyright © 2026 Anthony Meza.
 - Free software distributed under the MIT License.
-

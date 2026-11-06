@@ -28,8 +28,6 @@ except importlib.metadata.PackageNotFoundError:
 
 # -- General configuration -----------------------------------------------------
 
-# -- General configuration -----------------------------------------------------
-
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = [
@@ -43,6 +41,8 @@ extensions = [
     "sphinx.ext.todo",
     # Auto generate docs
     "autoapi.extension",
+    # $...$ and $$...$$ math in docstrings (MyST dollarmath covers .md files)
+    "sphinx_math_dollar",
 ]
 
 # Support Markdown source files & rst for api docs
@@ -69,7 +69,7 @@ myst_enable_extensions = [
     "colon_fence",
     "deflist",
     "attrs_inline",
-    "dollarmath", 
+    "dollarmath",
     "amsmath"
 ]
 
@@ -78,7 +78,7 @@ myst_footnote_transition = False
 
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "jupyter_execute", "Thumbs.db", ".DS_Store"]
 
 #--------- setup autoapi defaults for your api docs ---------------
 
@@ -139,5 +139,8 @@ htmlhelp_basename = "xclimatology_doc"
 
 
 intersphinx_mapping = {
-    "python": ("https://docs.python.org/", None),
+    "python": ("https://docs.python.org/3/", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
+    "pandas": ("https://pandas.pydata.org/docs/", None),
+    "xarray": ("https://docs.xarray.dev/en/stable/", None),
 }
